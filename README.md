@@ -53,16 +53,6 @@ php -S 0.0.0.0:5551 -t .
 
 ---
 
-## 🧩 技术栈 / Tech Stack
-
-- **后端**: PHP 8+（cURL / GD）
-- **生图**: [Pollinations AI](https://pollinations.ai/apps)（flux / zimage）
-- **认证**: 官方 BYOP OAuth 2.1 + PKCE
-- **导出**: ICONDIR + PNG 封装 `.cur`（Windows Vista+ 原生支持）
-- **部署**: PHP 内置服务器 / 宝塔 / Cloudflare（R2 + Worker 托管素材）
-
----
-
 ## 📜 许可 / License
 
 仅个人 / 学习使用。生图费用由使用者的 Pollinations 账号余额承担，请遵守 [Pollinations](https://pollinations.ai) 服务条款。
