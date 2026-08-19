@@ -1,0 +1,30 @@
+# 机密配置（绝不入库）
+config.php
+config.local.php
+
+# 运行时数据（额度记录等，位于 index_assets 内）
+index_assets/data/*
+index_assets/config.php
+!index_assets/.gitkeep
+!index_assets/data/.gitkeep
+
+# 本地部署产物（含 config.php 副本，绝不入库）
+deploy/
+
+# 非本项目文件：旧版语音转文字工具页（不在光标工坊仓库维护）
+index.html
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+*.swp
+
+# 本地临时
+*.log
+.env
+.env.*
