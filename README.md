@@ -63,14 +63,6 @@ php -S 0.0.0.0:5551 -t .
 
 ---
 
-## ⚠️ 安全说明 / Security
-
-- 所有密钥（OAuth Client ID、开发者 Key、邀请码哈希）存于 `config.php`，已被 `.gitignore` 排除，不会进入仓库。
-- 免登录邀请码仅存 SHA-256 哈希，源码泄露也无法直接读出明文。
-- 邀请码校验使用 `hash_equals` 恒定时间比较，防时序攻击。
-
----
-
 ## 📜 许可 / License
 
 仅个人 / 学习使用。生图费用由使用者的 Pollinations 账号余额承担，请遵守 [Pollinations](https://pollinations.ai) 服务条款。
