@@ -12,7 +12,7 @@
 declare(strict_types=1);
 
 // 版本号：用于线上校验部署是否最新（以 HTML 注释输出，不污染页面）
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.5.0';
 
 // 生产安全：错误写日志而非输出到页面，避免污染 JSON/二进制响应
 ini_set('display_errors', '0');
@@ -506,6 +506,36 @@ if ($action === 'cur') {
 
 /* ======================= 页面 ======================= */
 
+// 语言：按访问者 IP 归属地自动切换（中国大陆→中文，其他→英文）。结果存 session 缓存，避免每次请求都调 GeoIP。
+function clientIp(): string {
+    foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $k) {
+        $v = trim((string)($_SERVER[$k] ?? ''));
+        if ($v !== '') {
+            $first = explode(',', $v)[0];
+            if (filter_var($first, FILTER_VALIDATE_IP)) return $first;
+        }
+    }
+    return '0.0.0.0';
+}
+function detectLang(): string {
+    if (isset($_SESSION['ui_lang']) && ($_SESSION['ui_lang'] === 'zh' || $_SESSION['ui_lang'] === 'en')) {
+        return $_SESSION['ui_lang'];
+    }
+    $lang = 'zh';
+    $ip   = clientIp();
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        [$s, $b] = httpRequest('http://ip-api.com/json/' . $ip . '?fields=countryCode&lang=en', [], null);
+        if ($s === 200) {
+            $j = json_decode((string)$b, true) ?: [];
+            $cc = strtoupper((string)($j['countryCode'] ?? ''));
+            if ($cc !== '' && $cc !== 'CN') $lang = 'en';
+        }
+    }
+    $_SESSION['ui_lang'] = $lang;
+    return $lang;
+}
+$LANG = detectLang();
+
 $token = getToken();
 $user  = null;
 if ($token) {
@@ -520,13 +550,13 @@ $flashMsg = takeFlash();
 $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= $LANG === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
 <meta charset="UTF-8">
 <!-- APP_VERSION:<?= APP_VERSION ?> -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#100C09">
-<title>光标工坊 · Cursor Atelier — AI 鼠标光标生成器</title>
+<title><?= $LANG === 'en' ? 'Cursor Maker — AI Windows Cursor Generator' : '光标工坊 · Cursor Atelier — AI 鼠标光标生成器' ?></title>
 <style>
   /* ============ 主题 1：暗黑奢华（默认） ============ */
   :root, body.theme-1{
@@ -868,12 +898,12 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
 <div class="wrap">
   <!-- 品牌行 -->
   <div class="brand anim-in">
-    <div class="brand-mark"><span class="dot"></span>CURSOR&nbsp;ATELIER</div>
-    <div class="brand-zh">光标工坊</div>
+    <div class="brand-mark"><span class="dot"></span>CURSOR&nbsp;MAKER</div>
+    <div class="brand-zh"><?= $LANG === 'en' ? 'Cursor Studio' : '光标工坊' ?></div>
   </div>
 
   <!-- 免登录入口：右上角小胶囊（始终显示，登录后也可输入邀请码） -->
-  <button class="guest-chip" type="button" id="inviteChip">🎟️ 免登录生成</button>
+  <button class="guest-chip" type="button" id="inviteChip"><?= $LANG === 'en' ? '🎟️ Guest mode' : '🎟️ 免登录生成' ?></button>
 
   <!-- 沉浸式首屏：文案浮于全屏视频背景上 -->
   <section class="hero">
@@ -892,35 +922,35 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
           <g class="sparkle s2"><path d="M104 22 q2.2 4.6 4.6 4.6 q-4.6 2.2 -4.6 4.6 q0 -4.6 -4.6 -4.6 q2.4 0 4.6 -4.6 Z" fill="#E9C07F"/></g>
         </svg>
       </div>
-      <div class="kicker">Cursor Atelier · 光标工坊</div>
-      <h1>一枚光标<br><b>一种个性</b></h1>
-      <p class="lede">每一次移动，都是你风格的注脚。<br>
-        输入一句话，AI 为你铸造专属 <code>.cur</code> 光标——<br>
-        透明背景 · 自定热点 · Windows 原生即用。</p>
+      <div class="kicker"><?= $LANG === 'en' ? 'Cursor Maker · AI Cursor Studio' : 'Cursor Atelier · 光标工坊' ?></div>
+      <h1><?= $LANG === 'en' ? 'One cursor.<br><b>One personality.</b>' : '一枚光标<br><b>一种个性</b>' ?></h1>
+      <p class="lede"><?= $LANG === 'en'
+        ? 'Every move is a note of your style.<br>Type one line and AI forges your own <code>.cur</code> cursor—<br>transparent · custom hotspot · native Windows.'
+        : '每一次移动，都是你风格的注脚。<br>输入一句话，AI 为你铸造专属 <code>.cur</code> 光标——<br>透明背景 · 自定热点 · Windows 原生即用。' ?></p>
       <?php if ($token || $isGuest): ?>
-      <a class="btn" href="#maker">开始铸造</a>
+      <a class="btn" href="#maker"><?= $LANG === 'en' ? 'Start crafting' : '开始铸造' ?></a>
       <?php else: ?>
-      <a class="btn" href="?action=login">开始铸造</a>
+      <a class="btn" href="?action=login"><?= $LANG === 'en' ? 'Start crafting' : '开始铸造' ?></a>
       <?php endif; ?>
     </div>
     <div class="hero-right">
       <!-- 生成工坊：浮于右侧视频上，始终展示制作表单 -->
       <div class="maker-panel">
-        <h2><span class="step">1</span> 描述光标样式</h2>
+        <h2><span class="step">1</span> <?= $LANG === 'en' ? 'Describe your cursor' : '描述光标样式' ?></h2>
         <div class="field" style="margin:0">
-          <textarea id="prompt" placeholder="例如：发光的蓝色水晶箭头鼠标指针…"></textarea>
+          <textarea id="prompt" placeholder="<?= $LANG === 'en' ? 'e.g. glowing blue crystal arrow cursor…' : '例如：发光的蓝色水晶箭头鼠标指针…' ?>"></textarea>
         </div>
-        <h2 style="margin-top:14px"><span class="step">2</span> 参数</h2>
+        <h2 style="margin-top:14px"><span class="step">2</span> <?= $LANG === 'en' ? 'Parameters' : '参数' ?></h2>
         <div class="row" style="margin-bottom:0">
           <div class="field">
-            <label for="model">模型</label>
+            <label for="model"><?= $LANG === 'en' ? 'Model' : '模型' ?></label>
             <select id="model">
-              <option value="flux">flux · 0.01 元/张</option>
-              <option value="zimage" selected>zimage · 0.028 元/张</option>
+              <option value="flux">flux · <?= $LANG === 'en' ? '0.01 USD' : '0.01 元/张' ?></option>
+              <option value="zimage" selected>zimage · <?= $LANG === 'en' ? '0.028 USD' : '0.028 元/张' ?></option>
             </select>
           </div>
           <div class="field">
-            <label for="curSize">光标尺寸</label>
+            <label for="curSize"><?= $LANG === 'en' ? 'Cursor size' : '光标尺寸' ?></label>
             <select id="curSize">
               <option value="32">32 × 32</option>
               <option value="48" selected>48 × 48</option>
@@ -930,24 +960,24 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
           </div>
         </div>
         <div class="field">
-          <label for="styleTpl">风格模板</label>
+          <label for="styleTpl"><?= $LANG === 'en' ? 'Style preset' : '风格模板' ?></label>
           <select id="styleTpl">
-            <option value="默认" selected>默认 · 光标图标</option>
-            <option value="扁平">扁平简洁</option>
-            <option value="3D">3D 光泽</option>
-            <option value="霓虹">霓虹发光</option>
-            <option value="卡通">卡通可爱</option>
-            <option value="金属">金属质感</option>
+            <option value="默认" selected><?= $LANG === 'en' ? 'Default · cursor icon' : '默认 · 光标图标' ?></option>
+            <option value="扁平"><?= $LANG === 'en' ? 'Flat & minimal' : '扁平简洁' ?></option>
+            <option value="3D"><?= $LANG === 'en' ? '3D glossy' : '3D 光泽' ?></option>
+            <option value="霓虹"><?= $LANG === 'en' ? 'Neon glow' : '霓虹发光' ?></option>
+            <option value="卡通"><?= $LANG === 'en' ? 'Cartoon cute' : '卡通可爱' ?></option>
+            <option value="金属"><?= $LANG === 'en' ? 'Metallic' : '金属质感' ?></option>
           </select>
         </div>
         <div class="field" style="margin:0">
-          <label class="check" title="自动抠除四角连通背景，导出透明 .cur"><input type="checkbox" id="transparent" checked> 背景透明化 <b class="free-hype">· 每月 <?= FREE_CREDITS ?> 张免费</b></label>
+          <label class="check" title="<?= $LANG === 'en' ? 'Auto-remove connected background, export transparent .cur' : '自动抠除四角连通背景，导出透明 .cur' ?>"><input type="checkbox" id="transparent" checked> <?= $LANG === 'en' ? 'Transparent background' : '背景透明化' ?> <b class="free-hype">· <?= $LANG === 'en' ? FREE_CREDITS . ' free / month' : '每月 ' . FREE_CREDITS . ' 张免费' ?></b></label>
         </div>
         <?php if ($token || $isGuest): ?>
-        <button class="btn anim-in" id="genBtn" style="margin-top:16px">✨ 生成光标样式</button>
+        <button class="btn anim-in" id="genBtn" style="margin-top:16px"><?= $LANG === 'en' ? '✨ Generate cursor' : '✨ 生成光标样式' ?></button>
         <?php else: ?>
         <button class="btn anim-in" id="genBtn" type="button" style="margin-top:16px"
-                onclick="window.location='?action=login'">🎟️ 免费生成(登录)</button>
+                onclick="window.location='?action=login'"><?= $LANG === 'en' ? '🎟️ Free to start (login)' : '🎟️ 免费生成(登录)' ?></button>
         <?php endif; ?>
         <div class="status anim-in" id="status" role="status" aria-live="polite"></div>
       </div>
@@ -960,20 +990,21 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
     <!-- 邀请码模态框（免登录 / 登录后均可输入） -->
     <div class="hotspot-overlay" id="inviteOverlay" role="dialog" aria-modal="true" aria-labelledby="inviteTitle">
       <div class="hotspot-modal" style="max-width:360px;text-align:center">
-        <h3 id="inviteTitle" style="justify-content:center">🎟️ 凭邀请码无限生成</h3>
-        <p class="hotspot-sub" style="text-align:center;margin-top:6px">输入邀请码，无需登录即可不限次数生成光标。</p>
+        <h3 id="inviteTitle" style="justify-content:center"><?= $LANG === 'en' ? '🎟️ Unlimited via invite code' : '🎟️ 凭邀请码无限生成' ?></h3>
+        <p class="hotspot-sub" style="text-align:center;margin-top:6px"><?= $LANG === 'en' ? 'Enter the invite code to generate unlimited cursors without login.' : '输入邀请码，无需登录即可不限次数生成光标。' ?></p>
         <div class="invite-field">
-          <input id="inviteKey" type="text" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="邀请码">
+          <input id="inviteKey" type="text" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="<?= $LANG === 'en' ? 'Invite code' : '邀请码' ?>">
           <div class="invite-tip" id="inviteMsg"></div>
         </div>
         <div class="hotspot-actions" style="justify-content:center">
-          <button class="btn ghost" type="button" id="inviteCancel" style="flex:1">取消</button>
-          <button class="btn" type="button" id="inviteGo" style="flex:1">验证并进入</button>
+          <button class="btn ghost" type="button" id="inviteCancel" style="flex:1"><?= $LANG === 'en' ? 'Cancel' : '取消' ?></button>
+          <button class="btn" type="button" id="inviteGo" style="flex:1"><?= $LANG === 'en' ? 'Verify & enter' : '验证并进入' ?></button>
         </div>
       </div>
     </div>
     <script>
     (() => {
+      const LANG = <?= json_encode($LANG) ?>;
       const overlay = document.getElementById('inviteOverlay');
       const input   = document.getElementById('inviteKey');
       const msg     = document.getElementById('inviteMsg');
@@ -985,8 +1016,8 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
       const close = () => overlay.classList.remove('on');
       const submit = async () => {
         const key = input.value.trim();
-        if (!key) { msg.textContent = '请输入邀请码'; msg.style.color = 'var(--err)'; return; }
-        go.disabled = true; msg.textContent = '验证中…'; msg.style.color = 'var(--muted)';
+        if (!key) { msg.textContent = LANG === 'en' ? 'Please enter the invite code' : '请输入邀请码'; msg.style.color = 'var(--err)'; return; }
+        go.disabled = true; msg.textContent = LANG === 'en' ? 'Verifying…' : '验证中…'; msg.style.color = 'var(--muted)';
         try {
           const res = await fetch('?action=invite', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -994,9 +1025,9 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
           });
           const d = await res.json();
           if (d.ok) { location.reload(); return; }
-          msg.textContent = d.error || '邀请码无效'; msg.style.color = 'var(--err)';
+          msg.textContent = d.error || (LANG === 'en' ? 'Invalid invite code' : '邀请码无效'); msg.style.color = 'var(--err)';
         } catch (e) {
-          msg.textContent = '请求失败：' + e.message; msg.style.color = 'var(--err)';
+          msg.textContent = (LANG === 'en' ? 'Request failed: ' : '请求失败：') + e.message; msg.style.color = 'var(--err)';
         } finally { go.disabled = false; }
       };
       go.addEventListener('click', submit);
@@ -1015,45 +1046,45 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
     <div class="userbar anim-in" id="maker">
       <div class="ub-left">
         <?php if ($isGuest): ?>
-          <span class="ub-user">🎟️ 游客 · 邀请码</span>
+          <span class="ub-user"><?= $LANG === 'en' ? '🎟️ Guest · invite code' : '🎟️ 游客 · 邀请码' ?></span>
         <?php else: ?>
           <span class="ub-user">👤 <?= htmlspecialchars($username) ?></span>
         <?php endif; ?>
-        <span class="chip"><?php if ($isGuest): ?>🎟️ 邀请码模式<?php else: ?>🎁 免费铸造 <b id="freeCount"><?= (int)$freeLeft ?>/<?= FREE_CREDITS ?></b><?php endif; ?></span>
+        <span class="chip"><?php if ($isGuest): ?><?= $LANG === 'en' ? '🎟️ Invite mode' : '🎟️ 邀请码模式' ?><?php else: ?><?= $LANG === 'en' ? '🎁 Free crafts' : '🎁 免费铸造' ?> <b id="freeCount"><?= (int)$freeLeft ?>/<?= FREE_CREDITS ?></b><?php endif; ?></span>
       </div>
       <?php if ($isGuest): ?>
-        <a class="btn ghost small" href="?action=login">🔑 登录</a>
+        <a class="btn ghost small" href="?action=login">🔑 <?= $LANG === 'en' ? 'Login' : '登录' ?></a>
       <?php else: ?>
-        <a class="btn ghost small" href="?action=logout">退出登录</a>
+        <a class="btn ghost small" href="?action=logout"><?= $LANG === 'en' ? 'Log out' : '退出登录' ?></a>
       <?php endif; ?>
     </div>
 
     <div class="card anim-in" id="previewCard" style="display:none;margin-top:18px">
-      <h2>✨ 预览</h2>
+      <h2><?= $LANG === 'en' ? '✨ Preview' : '✨ 预览' ?></h2>
       <div id="previewWrap">
-        <img id="preview" alt="光标预览">
+        <img id="preview" alt="cursor preview">
         <div id="hotspotMark"></div>
       </div>
-      <div class="hint">点击预览设置热点（热点 = 鼠标实际点击点）· 当前热点：<b id="hotspotLabel">24, 24</b></div>
+      <div class="hint"><?= $LANG === 'en' ? 'Click the preview to set the hotspot (the pixel where the mouse actually clicks) · Current:' : '点击预览设置热点（热点 = 鼠标实际点击点）· 当前热点：' ?> <b id="hotspotLabel">24, 24</b></div>
       <div class="actions">
-        <button class="btn ghost" id="regenBtn">🔄 换一个</button>
-        <button class="btn" id="dlBtn">⬇️ 下载 .cur 光标</button>
+        <button class="btn ghost" id="regenBtn">🔄 <?= $LANG === 'en' ? 'Regenerate' : '换一个' ?></button>
+        <button class="btn" id="dlBtn">⬇️ <?= $LANG === 'en' ? 'Download .cur' : '下载 .cur 光标' ?></button>
       </div>
     </div>
 
     <!-- 热点设置模态框：下载前弹出，让用户精确标记鼠标实际点击点 -->
     <div class="hotspot-overlay" id="hsOverlay" role="dialog" aria-modal="true" aria-labelledby="hsTitle">
       <div class="hotspot-modal">
-        <h3 id="hsTitle">🎯 设置光标热点（准星）</h3>
-        <p class="hotspot-sub">热点就是鼠标真正「点击生效」的地方。请点击图片上的 <b style="color:var(--gold)">箭头尖 / 你想要点中的位置</b>，然后导出。</p>
+        <h3 id="hsTitle"><?= $LANG === 'en' ? '🎯 Set cursor hotspot (crosshair)' : '🎯 设置光标热点（准星）' ?></h3>
+        <p class="hotspot-sub"><?= $LANG === 'en' ? 'The hotspot is where the mouse actually "clicks". Click the <b style="color:var(--gold)">arrow tip / the spot you want to hit</b> on the image, then export.' : '热点就是鼠标真正「点击生效」的地方。请点击图片上的 <b style="color:var(--gold)">箭头尖 / 你想要点中的位置</b>，然后导出。' ?></p>
         <div class="hotspot-stage" id="hsStage">
-          <img class="hs-img" id="hsImg" alt="设置热点预览">
+          <img class="hs-img" id="hsImg" alt="<?= $LANG === 'en' ? 'hotspot preview' : '设置热点预览' ?>">
           <span class="hs-mark" id="hsMark" style="display:none"><span class="hs-dot"></span></span>
         </div>
-        <div class="hint" style="margin-top:10px">当前热点：<b id="hsLabel">0, 0</b>（相对图左上角）</div>
+        <div class="hint" style="margin-top:10px"><?= $LANG === 'en' ? 'Current hotspot:' : '当前热点：' ?> <b id="hsLabel">0, 0</b> (<?= $LANG === 'en' ? 'relative to top-left' : '相对图左上角' ?>)</div>
         <div class="hotspot-actions">
-          <button class="btn ghost" id="hsCancel">取消</button>
-          <button class="btn" id="hsConfirm">✅ 以此热点导出</button>
+          <button class="btn ghost" id="hsCancel"><?= $LANG === 'en' ? 'Cancel' : '取消' ?></button>
+          <button class="btn" id="hsConfirm"><?= $LANG === 'en' ? '✅ Export with this hotspot' : '✅ 以此热点导出' ?></button>
         </div>
       </div>
     </div>
@@ -1068,6 +1099,7 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
 <script>
 (() => {
   const $ = id => document.getElementById(id);
+  const LANG = <?= json_encode($LANG) ?>;
   const prompt   = $('prompt');
   const model    = $('model');
   const curSize  = $('curSize');
@@ -1113,8 +1145,17 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
   }
 
   // 提示词模板：默认提示词
-  const CURSOR_SUFFIX = '。请将以上内容设计为一个 cur 图标，在左上角边缘添加一个同色斜向上箭头';
-  const STYLE_SUFFIX = {
+  const CURSOR_SUFFIX = LANG === 'en'
+    ? '. Design this as a cursor icon, with a matching diagonal up-right arrow near the top-left edge.'
+    : '。请将以上内容设计为一个 cur 图标，在左上角边缘添加一个同色斜向上箭头';
+  const STYLE_SUFFIX = LANG === 'en' ? {
+    '默认': '',
+    '扁平': ', flat minimal design, clean',
+    '3D': ', 3D render, highlights, glossy depth',
+    '霓虹': ', neon tube glow, neon halo',
+    '卡通': ', cartoon cute style, rounded lines, chibi',
+    '金属': ', metallic texture, mirror highlights, polished'
+  } : {
     '默认': '',
     '扁平': '，扁平化简洁设计，干净利落',
     '3D': '，3D 渲染，高光，立体光泽质感',
@@ -1125,10 +1166,10 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
 
   async function generate() {
     const p = prompt.value.trim();
-    if (!p) { setStatus('❌ 请输入光标样式描述', 'err'); return; }
+    if (!p) { setStatus('❌ ' + (LANG === 'en' ? 'Please describe your cursor' : '请输入光标样式描述'), 'err'); return; }
     const fullPrompt = p + CURSOR_SUFFIX + (STYLE_SUFFIX[styleTpl.value] || '');
     genBtn.disabled = true;
-    setStatus('<span class="spinner"></span> 正在生成…');
+    setStatus('<span class="spinner"></span> ' + (LANG === 'en' ? 'Generating…' : '正在生成…'));
     try {
       const res = await fetch('?action=generate', {
         method: 'POST',
@@ -1138,9 +1179,9 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
       const data = await res.json();
       if (!data.ok) {
         const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        const msg = esc(data.error || '生成失败');
+        const msg = esc(data.error || (LANG === 'en' ? 'Generation failed' : '生成失败'));
         if (data.recharge) {
-          setStatus('❌ ' + msg + ' <a href="https://enter.pollinations.ai/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:underline">→ 去官网充值</a>', 'err');
+          setStatus('❌ ' + msg + ' <a href="https://enter.pollinations.ai/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:underline">' + (LANG === 'en' ? '→ Recharge at official site' : '→ 去官网充值') + '</a>', 'err');
         } else {
           setStatus('❌ ' + msg, 'err');
         }
@@ -1158,13 +1199,13 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
       if (freeCountEl && typeof data.freeLeft === 'number' && data.pay !== 'guest') {
         freeCountEl.textContent = data.freeLeft + '/<?= FREE_CREDITS ?>';
       }
-      const payNote = data.pay === 'free' ? '（使用免费额度，剩余 ' + data.freeLeft + ' 次）'
-        : data.pay === 'guest' ? '（邀请码模式）' : '（使用你的余额支付）';
-      setStatus('✅ 生成完成' + payNote + '，请点击设置热点后导出', 'ok');
+      const payNote = data.pay === 'free' ? (LANG === 'en' ? ' (free quota, ' + data.freeLeft + ' left)' : '（使用免费额度，剩余 ' + data.freeLeft + ' 次）')
+        : data.pay === 'guest' ? (LANG === 'en' ? ' (invite mode)' : '（邀请码模式）') : (LANG === 'en' ? ' (paid with your balance)' : '（使用你的余额支付）');
+      setStatus('✅ ' + (LANG === 'en' ? 'Done' : '生成完成') + payNote + (LANG === 'en' ? ', set the hotspot then export' : '，请点击设置热点后导出'), 'ok');
       // 生成完成直接弹出热点设置模态框
       setTimeout(openHotspot, 120);
     } catch (e) {
-      setStatus('❌ 请求失败：' + e.message, 'err');
+      setStatus('❌ ' + (LANG === 'en' ? 'Request failed: ' : '请求失败：') + e.message, 'err');
     } finally {
       genBtn.disabled = false;
     }
@@ -1224,7 +1265,7 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
   }
   async function doExport() {
     dlBtn.disabled = true;
-    setStatus('<span class="spinner"></span> 正在生成 .cur…');
+    setStatus('<span class="spinner"></span> ' + (LANG === 'en' ? 'Generating .cur…' : '正在生成 .cur…'));
     try {
       const res = await fetch('?action=cur', {
         method: 'POST',
@@ -1237,7 +1278,7 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
           transparent: transparent.checked
         })
       });
-      if (!res.ok) { setStatus('❌ 导出失败：HTTP ' + res.status, 'err'); return; }
+      if (!res.ok) { setStatus('❌ ' + (LANG === 'en' ? 'Export failed: HTTP ' : '导出失败：HTTP ') + res.status, 'err'); return; }
       const blob = await res.blob();
       const disp = res.headers.get('Content-Disposition') || '';
       const m = disp.match(/filename="([^"]+)"/);
@@ -1246,9 +1287,9 @@ $freeLeft = getToken() ? freeLeft(currentUserId()) : 0;
       a.download = m ? m[1] : 'cursor.cur';
       document.body.appendChild(a); a.click(); a.remove();
       closeHotspot();
-      setStatus('✅ 已导出 .cur（热点 ' + hx + ',' + hy + '，尺寸 ' + curSizeNow() + '）', 'ok');
+      setStatus('✅ ' + (LANG === 'en' ? 'Exported .cur (hotspot ' : '已导出 .cur（热点 ') + hx + ',' + hy + (LANG === 'en' ? ', size ' : '，尺寸 ') + curSizeNow() + (LANG === 'en' ? ')' : '）'), 'ok');
     } catch (e) {
-      setStatus('❌ 导出失败：' + e.message, 'err');
+      setStatus('❌ ' + (LANG === 'en' ? 'Export failed: ' : '导出失败：') + e.message, 'err');
     } finally {
       dlBtn.disabled = false;
     }
